@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use chrono::Days;
 use chrono::{Local, NaiveDate, NaiveTime};
 use clap::{Parser, Subcommand};
@@ -9,6 +11,11 @@ use regex::Regex;
 pub struct Cli {
     #[command(subcommand)]
     pub command: Commands,
+
+    /// Where this application should store its data. Defaults to an operating
+    /// system specific convention.
+    #[arg(long, short)]
+    pub storage_dir: Option<PathBuf>,
 }
 
 #[derive(Subcommand)]
@@ -74,7 +81,8 @@ fn parse_date(user_input: &str) -> Result<NaiveDate, String> {
 
     let re = Regex::new(r"^(\d{2,4})-?(\d{2})-?(\d{2})$").unwrap();
     let captures = re.captures(user_input).ok_or(format!(
-        "Unknown date format: '{user_input}'; try e.g. 2024-01-31, 20240131, 240131"
+        "Unknown date format: '{user_input}'; \
+        try e.g. 2024-01-31, 20240131, 240131"
     ))?;
 
     // Can just unwrap() the parse results, because the regex ensures that

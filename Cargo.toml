@@ -6,9 +6,12 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+anyhow = "1.0.80"
 chrono = "0.4.34"
 clap = { version = "4.5.1", features = ["derive"] }
+directories = "5.0.1"
 regex = "1.10.3"
+tempfile = "3.10.1"
 
 [lints.clippy]
 pedantic = { level = "warn", priority = -1 }
