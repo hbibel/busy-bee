@@ -2,6 +2,7 @@ use anyhow::{anyhow, Result};
 use busy_bee::{
     cli::{Cli, Commands},
     data::{create_event, delete_event, Event},
+    view::daily_report,
 };
 use chrono::{DateTime, Local, NaiveDate, NaiveTime, TimeZone, Timelike, Utc};
 use clap::Parser;
@@ -24,19 +25,25 @@ fn main() {
         Commands::ClockIn { date, time } => {
             let dt = get_date_time(date, time).unwrap();
             let event = Event::clock_in(&dt);
-            create_event(&storage_dir, &event).unwrap();
+            let events = create_event(&storage_dir, &event).unwrap();
+            let report = daily_report(&dt.date_naive(), &events).unwrap();
+            println!("{report}");
         }
         Commands::ClockOut { date, time } => {
             let dt = get_date_time(date, time).unwrap();
             let event = Event::clock_out(&dt);
-            create_event(&storage_dir, &event).unwrap();
+            let events = create_event(&storage_dir, &event).unwrap();
+            let report = daily_report(&dt.date_naive(), &events).unwrap();
+            println!("{report}");
         }
         Commands::Delete { date, id } => {
             let date = match date {
                 Some(d) => d,
                 None => Local::now().date_naive(),
             };
-            delete_event(&storage_dir, date, id).unwrap();
+            let events = delete_event(&storage_dir, date, id).unwrap();
+            let report = daily_report(&date, &events).unwrap();
+            println!("{report}");
         }
         _ => todo!(),
     };

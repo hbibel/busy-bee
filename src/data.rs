@@ -66,7 +66,7 @@ impl Event {
     }
 }
 
-pub fn create_event(storage_dir: &Path, event: &Event) -> Result<()> {
+pub fn create_event(storage_dir: &Path, event: &Event) -> Result<Vec<Event>> {
     let mut events = read_events(storage_dir, event.dt.date_naive())
         .with_context(|| {
             let sd = storage_dir.display();
@@ -87,7 +87,8 @@ pub fn create_event(storage_dir: &Path, event: &Event) -> Result<()> {
     write_to_file(&file_path, &events_as_str).with_context(|| {
         let fd = file_path.display();
         format!("Could not write events to file {fd}")
-    })
+    })?;
+    Ok(events)
 }
 
 pub fn read_events(storage_dir: &Path, date: NaiveDate) -> Result<Vec<Event>> {
@@ -149,23 +150,27 @@ pub fn delete_event(
     storage_dir: &Path,
     date: NaiveDate,
     id: u32,
-) -> Result<()> {
+) -> Result<Vec<Event>> {
     let events = read_events(storage_dir, date)?;
     #[allow(clippy::cast_possible_truncation)]
-    let events: Vec<&Event> = events
+    let events: Vec<Event> = events
         .iter()
         .enumerate()
         .filter(|(event_id, _)| *event_id as u32 != id)
-        .map(|(_, event)| event)
+        .map(|(_, event)| event.clone())
         .collect();
 
-    let events_as_str: String =
-        events.iter().map(|event| event_to_str(event)).collect();
+    let events_as_str: String = events
+        .iter()
+        .map(event_to_str)
+        .collect::<Vec<_>>()
+        .join("\n");
 
     let file_name = get_file_name(&date);
     let file_path = storage_dir.join(file_name);
 
-    write_to_file(&file_path, &events_as_str)
+    write_to_file(&file_path, &events_as_str)?;
+    Ok(events)
 }
 
 fn get_file_name<T: Datelike>(has_date: &T) -> String {
