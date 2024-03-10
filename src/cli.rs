@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use chrono::Days;
+use chrono::{Datelike, Days};
 use chrono::{Local, NaiveDate, NaiveTime};
 use clap::{Parser, Subcommand};
 use regex::Regex;
@@ -52,7 +52,11 @@ pub enum Commands {
         id: u32,
     },
     /// View a monthly summary of recorded times
-    Report {},
+    Report {
+        /// Month to view recorded times for
+        #[arg(value_parser=parse_month)]
+        date: Option<NaiveDate>,
+    },
 }
 
 fn parse_time(user_input: &str) -> Result<NaiveTime, String> {
@@ -88,6 +92,7 @@ fn parse_date(user_input: &str) -> Result<NaiveDate, String> {
     // Can just unwrap() the parse results, because the regex ensures that
     // we're dealing with numeric characters only
     let mut year = captures[1].parse::<i32>().unwrap();
+    // TODO: Hack; fix within the next 975 years
     if year < 2000 {
         year += 2000;
     }
@@ -97,8 +102,52 @@ fn parse_date(user_input: &str) -> Result<NaiveDate, String> {
         .ok_or(format!("{year}-{month}-{day} is not a valid date"))
 }
 
+pub fn parse_month(user_input: &str) -> Result<NaiveDate, String> {
+    let parts: Vec<_> =
+        user_input.splitn(2, |c| c == '/' || c == ' ').collect();
+    let month = parts
+        .first()
+        .ok_or("Empty input for month".to_string())
+        .and_then(|s| month_from_str(s))?;
+    let mut year = parts.get(1).map_or_else(
+        || Ok(Local::now().year()),
+        |s| s.parse().map_err(|e| format!("{e}")),
+    )?;
+    if year < 2000 {
+        year += 2000;
+    }
+    NaiveDate::from_ymd_opt(year, month, 1)
+        .ok_or(format!("Invalid month: {month}"))
+}
+
+fn month_from_str(s: &str) -> Result<u32, String> {
+    if s.chars().all(|c| c.is_ascii_digit()) {
+        s.parse().map_err(|e| format!("{e}"))
+    } else {
+        match s.to_ascii_lowercase().as_str() {
+            "jan" | "january" => Ok(1),
+            "feb" | "february" => Ok(2),
+            "mar" | "march" => Ok(3),
+            "apr" | "april" => Ok(4),
+            "may" => Ok(5),
+            "jun" | "june" => Ok(6),
+            "jul" | "july" => Ok(7),
+            "aug" | "august" => Ok(8),
+            "sep" | "september" => Ok(9),
+            "oct" | "october" => Ok(10),
+            "nov" | "november" => Ok(11),
+            "dec" | "december" => Ok(12),
+            _ => Err(format!(
+                "Invalid month specifier {s}, try e.g., '1' or 'Jan'"
+            )),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
+
+    use chrono::Datelike;
 
     use super::*;
 
@@ -155,5 +204,50 @@ mod tests {
     fn test_parse_date_yy_mm_dd() {
         let expected = NaiveDate::from_ymd_opt(2024, 1, 13).unwrap();
         assert_eq!(parse_date("24-01-13"), Ok(expected));
+    }
+
+    #[test]
+    fn test_parse_month_mmm() {
+        let current_year = Local::now().year();
+        let expected = NaiveDate::from_ymd_opt(current_year, 2, 1).unwrap();
+        assert_eq!(parse_month("Feb"), Ok(expected));
+    }
+
+    #[test]
+    fn test_parse_month_mmm_yy() {
+        let expected = NaiveDate::from_ymd_opt(2022, 2, 1).unwrap();
+        assert_eq!(parse_month("Feb 22"), Ok(expected));
+    }
+
+    #[test]
+    fn test_parse_month_mmm_yyyy() {
+        let expected = NaiveDate::from_ymd_opt(2022, 2, 1).unwrap();
+        assert_eq!(parse_month("Feb 2022"), Ok(expected));
+    }
+
+    #[test]
+    fn test_parse_month_m() {
+        let current_year = Local::now().year();
+        let expected = NaiveDate::from_ymd_opt(current_year, 2, 1).unwrap();
+        assert_eq!(parse_month("2"), Ok(expected));
+    }
+
+    #[test]
+    fn test_parse_month_mm() {
+        let current_year = Local::now().year();
+        let expected = NaiveDate::from_ymd_opt(current_year, 2, 1).unwrap();
+        assert_eq!(parse_month("02"), Ok(expected));
+    }
+
+    #[test]
+    fn test_parse_month_m_yy() {
+        let expected = NaiveDate::from_ymd_opt(2022, 2, 1).unwrap();
+        assert_eq!(parse_month("2/2022"), Ok(expected));
+    }
+
+    #[test]
+    fn test_parse_month_mm_yy() {
+        let expected = NaiveDate::from_ymd_opt(2022, 2, 1).unwrap();
+        assert_eq!(parse_month("02/2022"), Ok(expected));
     }
 }

@@ -1,10 +1,13 @@
 use anyhow::{anyhow, Result};
 use busy_bee::{
     cli::{Cli, Commands},
-    data::{create_event, delete_event, Event},
-    view::daily_report,
+    data::{create_event, delete_event, read_events, Event},
+    view::{daily_report, monthly_report},
 };
-use chrono::{DateTime, Local, NaiveDate, NaiveTime, TimeZone, Timelike, Utc};
+use chrono::{
+    DateTime, Datelike, Days, Local, NaiveDate, NaiveTime, TimeZone, Timelike,
+    Utc,
+};
 use clap::Parser;
 use directories::ProjectDirs;
 
@@ -45,7 +48,28 @@ fn main() {
             let report = daily_report(&date, &events).unwrap();
             println!("{report}");
         }
-        _ => todo!(),
+        Commands::View { date } => {
+            let events = read_events(&storage_dir, date).unwrap();
+            let report = daily_report(&date, &events).unwrap();
+            println!("{report}");
+        }
+        Commands::Report { date } => {
+            let first_of_month = date.unwrap_or_else(|| {
+                Local::now().date_naive().with_day(1).unwrap()
+            });
+            let mut events = Vec::new();
+            // iterator over all days in the month
+            let days = std::iter::successors(Some(first_of_month), |day| {
+                day.checked_add_days(Days::new(1))
+                    .filter(|d| d.month0() == first_of_month.month0())
+            });
+            days.for_each(|date| {
+                events.extend(read_events(&storage_dir, date).unwrap());
+            });
+
+            let report = monthly_report(&first_of_month, &events).unwrap();
+            println!("{report}");
+        }
     };
 }
 

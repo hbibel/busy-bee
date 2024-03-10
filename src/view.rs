@@ -1,9 +1,11 @@
 use std::{
+    collections::BTreeMap,
     error::Error,
     fmt::{Display, Write},
+    ops::Sub,
 };
 
-use chrono::{Datelike, Local, NaiveDate, Timelike};
+use chrono::{Datelike, Duration, Local, NaiveDate};
 
 use crate::data::{Event, EventKind};
 
@@ -61,6 +63,52 @@ pub fn daily_report(
     Ok(result)
 }
 
+pub fn monthly_report(
+    date: &NaiveDate,
+    events: &[Event],
+) -> Result<String, ViewError> {
+    let mut result = String::new();
+
+    writeln!(result, "Summary for {}:", date.format("%B %Y"))?;
+
+    // using BTreeMap for its sorted keys
+    let mut events_per_day = BTreeMap::new();
+    for event in events {
+        let days_events = events_per_day
+            .entry(event.dt.day())
+            .or_insert_with(Vec::new);
+        days_events.push(event.clone());
+    }
+
+    for (day, days_events) in events_per_day {
+        let WorkingTime {
+            hours,
+            minutes,
+            complete,
+        } = working_time(&days_events);
+        let mut comment = "";
+        if !complete {
+            comment = "Incomplete records, please update";
+        }
+
+        let recorded_time = if complete {
+            format!("{hours:02}:{minutes:02}")
+        } else {
+            "?".to_string()
+        };
+        writeln!(result, "{day:<2} | {recorded_time:<5} | {comment}")?;
+    }
+
+    let WorkingTime {
+        hours,
+        minutes,
+        complete: _,
+    } = working_time(events);
+    writeln!(result, "Total working time: {hours:02}:{minutes:02} hours")?;
+    // TODO compute overtime
+    Ok(result)
+}
+
 fn same_date<T: Datelike, U: Datelike>(date1: &T, date2: &U) -> bool {
     date1.day() == date2.day()
         && date1.month() == date2.month()
@@ -74,9 +122,9 @@ struct WorkingTime {
 }
 
 fn working_time(events: &[Event]) -> WorkingTime {
-    let (mut hours, mut minutes, complete, _) = events.iter().fold(
-        (0, 0, true, None),
-        |(hours, minutes, complete, maybe_previous), event| match (
+    let (worked, complete, _) = events.iter().fold(
+        (Duration::new(0, 0).unwrap(), true, None),
+        |(duration, complete, maybe_previous), event| match (
             maybe_previous,
             event,
         ) {
@@ -86,38 +134,33 @@ fn working_time(events: &[Event]) -> WorkingTime {
                     kind: EventKind::ClockIn,
                     dt: _,
                 },
-            ) => (hours, minutes, complete, Some(event)),
+            ) => (duration, complete, Some(event)),
             (
                 None,
                 Event {
                     kind: EventKind::ClockOut,
                     dt: _,
                 },
-            ) => (hours, minutes, false, None),
+            ) => (duration, false, None),
             (
                 Some(_),
                 Event {
                     kind: EventKind::ClockIn,
                     dt: _,
                 },
-            ) => (hours, minutes, false, Some(event)),
+            ) => (duration, false, Some(event)),
             (
                 Some(prev),
                 Event {
                     kind: EventKind::ClockOut,
                     dt,
                 },
-            ) => (
-                hours + dt.hour() - prev.dt.hour(),
-                minutes + dt.minute() - prev.dt.minute(),
-                complete,
-                None,
-            ),
+            ) => (duration + dt.sub(prev.dt), complete, None),
         },
     );
 
-    hours += minutes / 60;
-    minutes %= 60;
+    let hours: u32 = worked.num_hours().try_into().unwrap();
+    let minutes: u32 = (worked.num_minutes() % 60).try_into().unwrap();
     WorkingTime {
         hours,
         minutes,
