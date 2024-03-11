@@ -23,6 +23,9 @@ fn main() {
             should be saved.",
         )
     });
+    if !storage_dir.exists() {
+        std::fs::create_dir(&storage_dir).unwrap();
+    }
 
     match args.command {
         Commands::ClockIn { date, time } => {
