@@ -5,7 +5,7 @@ use std::{
     ops::Sub,
 };
 
-use chrono::{Datelike, Duration, Local, NaiveDate};
+use chrono::{DateTime, Datelike, Duration, Local, NaiveDate};
 
 use crate::data::{Event, EventKind};
 
@@ -43,7 +43,8 @@ pub fn daily_report(
     writeln!(result, "{}:", date.format("%b %d, %Y"))?;
 
     for (i, event) in events.iter().enumerate() {
-        let time_str = event.dt.format("%H:%M");
+        let local_time: DateTime<Local> = DateTime::from(event.dt);
+        let time_str = local_time.format("%H:%M");
         let kind_str = match event.kind {
             EventKind::ClockIn => "clock in ",
             EventKind::ClockOut => "clock out",
