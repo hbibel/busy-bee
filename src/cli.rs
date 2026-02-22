@@ -57,6 +57,10 @@ pub enum Commands {
         #[arg(value_parser=parse_month)]
         date: Option<NaiveDate>,
     },
+    WeeklyReport {
+        #[arg(value_parser=parse_date)]
+        date: Option<NaiveDate>,
+    },
 }
 
 fn parse_time(user_input: &str) -> Result<NaiveTime, String> {

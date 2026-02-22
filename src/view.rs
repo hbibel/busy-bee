@@ -5,7 +5,9 @@ use std::{
     ops::Sub,
 };
 
-use chrono::{DateTime, Datelike, Duration, Local, NaiveDate};
+use chrono::{
+    DateTime, Datelike, Duration, Local, NaiveDate, TimeDelta, Weekday,
+};
 
 use crate::data::{Event, EventKind};
 
@@ -71,6 +73,57 @@ pub fn monthly_report(
     let mut result = String::new();
 
     writeln!(result, "Summary for {}:", date.format("%B %Y"))?;
+    writeln!(result, "{}", report_days(events)?)?;
+
+    // TODO compute overtime
+    Ok(result)
+}
+
+pub fn weekly_report(
+    date: &NaiveDate,
+    events: &[Event],
+) -> Result<String, ViewError> {
+    let mut result = String::new();
+
+    let calendar_week = {
+        // ISO 8601 defines year's week 1 to be the week containing the year's
+        // first Thursday. So if it's Friday, Jan 1 then the day actually
+        // belongs to last year's weeks by that definition.
+        let year = if date.month() == 1
+            && date.weekday().number_from_monday() - date.day() > 3
+        {
+            date.year() - 1
+        } else {
+            date.year()
+        };
+        let jan1 = NaiveDate::from_ymd_opt(year, 1, 1).unwrap();
+        let week_1_monday_offset = match jan1.weekday() {
+            Weekday::Mon => 0,
+            Weekday::Tue => -1,
+            Weekday::Wed => -2,
+            Weekday::Thu => -3,
+            Weekday::Fri => 3,
+            Weekday::Sat => 2,
+            Weekday::Sun => 1,
+        };
+        let week_1_monday = jan1
+            .checked_add_signed(TimeDelta::days(week_1_monday_offset))
+            .unwrap();
+        date.signed_duration_since(week_1_monday).num_days() / 7 + 1
+    };
+    writeln!(
+        result,
+        "Summary for calendar week {calendar_week}, starting {}:",
+        date.format("%Y-%m-%d")
+    )?;
+
+    writeln!(result, "{}", report_days(events)?)?;
+
+    Ok(result)
+}
+
+fn report_days(events: &[Event]) -> Result<String, ViewError> {
+    let mut result = String::new();
 
     // using BTreeMap for its sorted keys
     let mut events_per_day = BTreeMap::new();
@@ -106,7 +159,7 @@ pub fn monthly_report(
         complete: _,
     } = working_time(events);
     writeln!(result, "Total working time: {hours:02}:{minutes:02} hours")?;
-    // TODO compute overtime
+
     Ok(result)
 }
 

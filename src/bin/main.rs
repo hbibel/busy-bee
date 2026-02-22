@@ -2,7 +2,7 @@ use anyhow::{anyhow, Result};
 use busy_bee::{
     cli::{Cli, Commands},
     data::{create_event, delete_event, read_events, Event},
-    view::{daily_report, monthly_report},
+    view::{daily_report, monthly_report, weekly_report},
 };
 use chrono::{
     DateTime, Datelike, Days, Local, NaiveDate, NaiveTime, TimeZone, Timelike,
@@ -47,30 +47,55 @@ fn main() {
                 Some(d) => d,
                 None => Local::now().date_naive(),
             };
-            let events = delete_event(&storage_dir, date, id).unwrap();
+            let events = delete_event(&storage_dir, &date, id).unwrap();
             let report = daily_report(&date, &events).unwrap();
             println!("{report}");
         }
         Commands::View { date } => {
-            let events = read_events(&storage_dir, date).unwrap();
+            let events = read_events(&storage_dir, &date).unwrap();
             let report = daily_report(&date, &events).unwrap();
             println!("{report}");
         }
-        Commands::Report { date } => {
-            let first_of_month = date.unwrap_or_else(|| {
-                Local::now().date_naive().with_day(1).unwrap()
+        Commands::WeeklyReport { date } => {
+            let reference_day =
+                date.unwrap_or_else(|| Local::now().date_naive());
+            let monday = reference_day
+                .checked_sub_days(Days::new(
+                    reference_day.weekday().num_days_from_monday().into(),
+                ))
+                .unwrap();
+            let days = std::iter::successors(Some(monday), |day| {
+                let next_day = day.checked_add_days(Days::new(1)).unwrap();
+                if next_day <= reference_day {
+                    Some(next_day)
+                } else {
+                    None
+                }
             });
             let mut events = Vec::new();
-            // iterator over all days in the month
-            let days = std::iter::successors(Some(first_of_month), |day| {
-                day.checked_add_days(Days::new(1))
-                    .filter(|d| d.month0() == first_of_month.month0())
-            });
             days.for_each(|date| {
-                events.extend(read_events(&storage_dir, date).unwrap());
+                events.extend(read_events(&storage_dir, &date).unwrap());
             });
 
-            let report = monthly_report(&first_of_month, &events).unwrap();
+            let report = weekly_report(&monday, &events).unwrap();
+            println!("{report}");
+        }
+        Commands::Report { date } => {
+            let reference_day =
+                date.unwrap_or_else(|| Local::now().date_naive());
+            let first_of_month = reference_day.with_day(1).unwrap();
+            // iterator over all days in the month
+            let days =
+                std::iter::successors(Some(first_of_month), move |day| {
+                    day.checked_add_days(Days::new(1))
+                        .filter(|d| d.month0() == first_of_month.month0())
+                });
+            let mut events = Vec::new();
+            days.for_each(|date| {
+                events.extend(read_events(&storage_dir, &date).unwrap());
+            });
+
+            let report = monthly_report(&reference_day, &events).unwrap();
             println!("{report}");
         }
     };

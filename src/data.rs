@@ -67,7 +67,7 @@ impl Event {
 }
 
 pub fn create_event(storage_dir: &Path, event: &Event) -> Result<Vec<Event>> {
-    let mut events = read_events(storage_dir, event.dt.date_naive())
+    let mut events = read_events(storage_dir, &event.dt.date_naive())
         .with_context(|| {
             let sd = storage_dir.display();
             format!("Could not read events from storage directory {sd}")
@@ -91,8 +91,11 @@ pub fn create_event(storage_dir: &Path, event: &Event) -> Result<Vec<Event>> {
     Ok(events)
 }
 
-pub fn read_events(storage_dir: &Path, date: NaiveDate) -> Result<Vec<Event>> {
-    let file_name = get_file_name(&date);
+pub fn read_events(
+    storage_dir: &Path,
+    date: &NaiveDate,
+) -> Result<Vec<Event>> {
+    let file_name = get_file_name(date);
     let file_path = storage_dir.join(file_name);
 
     let mut file_content = String::new();
@@ -148,7 +151,7 @@ fn event_to_str(event: &Event) -> String {
 
 pub fn delete_event(
     storage_dir: &Path,
-    date: NaiveDate,
+    date: &NaiveDate,
     id: u32,
 ) -> Result<Vec<Event>> {
     let events = read_events(storage_dir, date)?;
@@ -166,7 +169,7 @@ pub fn delete_event(
         .collect::<Vec<_>>()
         .join("\n");
 
-    let file_name = get_file_name(&date);
+    let file_name = get_file_name(date);
     let file_path = storage_dir.join(file_name);
 
     write_to_file(&file_path, &events_as_str)?;
@@ -223,7 +226,7 @@ mod tests {
 
         let expected_events = vec![event1.clone()];
         assert_eq!(
-            read_events(dir, Local::now().date_naive()).unwrap(),
+            read_events(dir, &Local::now().date_naive()).unwrap(),
             expected_events
         );
 
@@ -235,15 +238,15 @@ mod tests {
 
         let expected_events = vec![event1.clone(), event2.clone()];
         assert_eq!(
-            read_events(dir, Local::now().date_naive()).unwrap(),
+            read_events(dir, &Local::now().date_naive()).unwrap(),
             expected_events
         );
 
-        delete_event(dir, Local::now().date_naive(), 0).unwrap();
+        delete_event(dir, &Local::now().date_naive(), 0).unwrap();
 
         let expected_events = vec![event2.clone()];
         assert_eq!(
-            read_events(dir, Local::now().date_naive()).unwrap(),
+            read_events(dir, &Local::now().date_naive()).unwrap(),
             expected_events
         );
     }
@@ -263,7 +266,7 @@ mod tests {
             .write_all(file_content.as_bytes())
             .unwrap();
 
-        let actual = read_events(dir, date);
+        let actual = read_events(dir, &date);
         let expected = vec![
             Event {
                 kind: EventKind::ClockIn,
@@ -284,7 +287,7 @@ mod tests {
         let d = tempdir().unwrap();
         let dir = d.path();
 
-        let actual = read_events(dir, date).unwrap();
+        let actual = read_events(dir, &date).unwrap();
         assert!(actual.is_empty());
     }
 
@@ -302,7 +305,7 @@ mod tests {
             .write_all(file_content.as_bytes())
             .unwrap();
 
-        let actual = read_events(dir, date).unwrap();
+        let actual = read_events(dir, &date).unwrap();
         assert!(actual.is_empty());
     }
 }
